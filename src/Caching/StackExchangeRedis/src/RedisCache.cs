@@ -16,18 +16,6 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
     /// </summary>
     public class RedisCache : IDistributedCache, IDisposable
     {
-        // KEYS[1] = = key
-        // ARGV[1] = absolute-expiration - ticks as long (-1 for none)
-        // ARGV[2] = sliding-expiration - ticks as long (-1 for none)
-        // ARGV[3] = relative-expiration (long, in seconds, -1 for none) - Min(absolute-expiration - Now, sliding-expiration)
-        // ARGV[4] = data - byte[]
-        // this order should not change LUA script depends on it
-        private const string SetScript = (@"
-                redis.call('HSET', KEYS[1], 'absexp', ARGV[1], 'sldexp', ARGV[2], 'data', ARGV[4])
-                if ARGV[3] ~= '-1' then
-                  redis.call('EXPIRE', KEYS[1], ARGV[3])
-                end
-                return 1");
         private const string AbsoluteExpirationKey = "absexp";
         private const string SlidingExpirationKey = "sldexp";
         private const string DataKey = "data";
@@ -107,14 +95,14 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
 
             var absoluteExpiration = GetAbsoluteExpiration(creationTime, options);
 
-            var result = _cache.ScriptEvaluate(SetScript, new RedisKey[] { _instance + key },
-                new RedisValue[]
-                {
-                        absoluteExpiration?.Ticks ?? NotPresent,
-                        options.SlidingExpiration?.Ticks ?? NotPresent,
-                        GetExpirationInSeconds(creationTime, absoluteExpiration, options) ?? NotPresent,
-                        value
-                });
+            _cache.ScriptEvaluate(Scripts.SetCache, new
+            {
+                key = (RedisKey)key,
+                absexp = absoluteExpiration?.Ticks ?? NotPresent,
+                sldexp = options.SlidingExpiration?.Ticks ?? NotPresent,
+                relexp = GetExpirationInSeconds(creationTime, absoluteExpiration, options) ?? NotPresent,
+                data = value
+            });
         }
 
         /// <inheritdoc />
@@ -143,14 +131,14 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
 
             var absoluteExpiration = GetAbsoluteExpiration(creationTime, options);
 
-            await _cache.ScriptEvaluateAsync(SetScript, new RedisKey[] { _instance + key },
-                new RedisValue[]
-                {
-                        absoluteExpiration?.Ticks ?? NotPresent,
-                        options.SlidingExpiration?.Ticks ?? NotPresent,
-                        GetExpirationInSeconds(creationTime, absoluteExpiration, options) ?? NotPresent,
-                        value
-                }).ConfigureAwait(false);
+            await _cache.ScriptEvaluateAsync(Scripts.SetCache, new
+            {
+                key = (RedisKey)key,
+                absexp = absoluteExpiration?.Ticks ?? NotPresent,
+                sldexp = options.SlidingExpiration?.Ticks ?? NotPresent,
+                relexp = GetExpirationInSeconds(creationTime, absoluteExpiration, options) ?? NotPresent,
+                data = value
+            }).ConfigureAwait(false);
         }
 
         /// <inheritdoc />
@@ -180,6 +168,7 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
         private void Connect()
         {
             CheckDisposed();
+
             if (_cache != null)
             {
                 return;
