@@ -14,19 +14,20 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
             return cache.HashGet(key, GetRedisMembers(members));
         }
 
-        internal static async Task<RedisValue[]> HashMemberGetAsync(
+        internal static Task<RedisValue[]> HashMemberGetAsync(
             this IDatabase cache,
             string key,
             params string[] members)
         {
             // TODO: Error checking?
-            return await cache.HashGetAsync(key, GetRedisMembers(members)).ConfigureAwait(false);
+            return cache.HashGetAsync(key, GetRedisMembers(members));
         }
 
-        private static RedisValue[] GetRedisMembers(params string[] members)
+        private static RedisValue[] GetRedisMembers(string[] members)
         {
             var redisMembers = new RedisValue[members.Length];
-            for (int i = 0; i < members.Length; i++)
+
+            for (var i = 0; i < members.Length; i++)
             {
                 redisMembers[i] = (RedisValue)members[i];
             }
