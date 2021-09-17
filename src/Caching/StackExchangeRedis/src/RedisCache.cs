@@ -16,9 +16,6 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
     /// </summary>
     public class RedisCache : IDistributedCache, IDisposable
     {
-        //private const string AbsoluteExpirationKey = "absexp";
-        //private const string SlidingExpirationKey = "sldexp";
-        //private const string DataKey = "data";
         private const long NotPresent = -1;
 
         private volatile IConnectionMultiplexer _connection;
@@ -179,7 +176,7 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
             {
                 if (_cache == null)
                 {
-                    if(_options.ConnectionMultiplexerFactory == null)
+                    if (_options.ConnectionMultiplexerFactory == null)
                     {
                         if (_options.ConfigurationOptions is not null)
                         {
@@ -220,7 +217,7 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
             {
                 if (_cache == null)
                 {
-                    if(_options.ConnectionMultiplexerFactory is null)
+                    if (_options.ConnectionMultiplexerFactory is null)
                     {
                         if (_options.ConfigurationOptions is not null)
                         {
@@ -265,18 +262,13 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
 
             // This also resets the LRU status as desired.
 
-            var results = (RedisValue[])_cache.ScriptEvaluate(Scripts.GetAndRefreshCache, new
+            var result = _cache.ScriptEvaluate(Scripts.GetAndRefreshCache, new
             {
                 key = (RedisKey)key,
                 getData = getData ? 1 : 0
             });
 
-            if (results.Length >= 3 && results[2].HasValue)
-            {
-                return results[2];
-            }
-
-            return null;
+            return result == default ? null : (byte[])result;
         }
 
         private async Task<byte[]> GetAndRefreshAsync(string key, bool getData, CancellationToken token = default(CancellationToken))
@@ -292,18 +284,13 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
 
             // This also resets the LRU status as desired.
 
-            var results = (RedisValue[])await _cache.ScriptEvaluateAsync(Scripts.GetAndRefreshCache, new
+            var result = await _cache.ScriptEvaluateAsync(Scripts.GetAndRefreshCache, new
             {
                 key = (RedisKey)key,
                 getData = getData ? 1 : 0
             }).ConfigureAwait(false);
 
-            if (results.Length >= 3 && results[2].HasValue)
-            {
-                return results[2];
-            }
-
-            return null;
+            return result == default ? null : (byte[])result;
         }
 
         /// <inheritdoc />
@@ -333,74 +320,6 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
             await _cache.KeyDeleteAsync(_instance + key).ConfigureAwait(false);
             // TODO: Error handling
         }
-
-        //private void MapMetadata(RedisValue[] results, out DateTimeOffset? absoluteExpiration, out TimeSpan? slidingExpiration)
-        //{
-        //    absoluteExpiration = null;
-        //    slidingExpiration = null;
-        //    var absoluteExpirationTicks = (long?)results[0];
-        //    if (absoluteExpirationTicks.HasValue && absoluteExpirationTicks.Value != NotPresent)
-        //    {
-        //        absoluteExpiration = new DateTimeOffset(absoluteExpirationTicks.Value, TimeSpan.Zero);
-        //    }
-        //    var slidingExpirationTicks = (long?)results[1];
-        //    if (slidingExpirationTicks.HasValue && slidingExpirationTicks.Value != NotPresent)
-        //    {
-        //        slidingExpiration = new TimeSpan(slidingExpirationTicks.Value);
-        //    }
-        //}
-
-        //private void Refresh(string key, DateTimeOffset? absExpr, TimeSpan? sldExpr)
-        //{
-        //    if (key == null)
-        //    {
-        //        throw new ArgumentNullException(nameof(key));
-        //    }
-
-        //    // Note Refresh has no effect if there is just an absolute expiration (or neither).
-        //    TimeSpan? expr = null;
-        //    if (sldExpr.HasValue)
-        //    {
-        //        if (absExpr.HasValue)
-        //        {
-        //            var relExpr = absExpr.Value - DateTimeOffset.Now;
-        //            expr = relExpr <= sldExpr.Value ? relExpr : sldExpr;
-        //        }
-        //        else
-        //        {
-        //            expr = sldExpr;
-        //        }
-        //        _cache.KeyExpire(_instance + key, expr);
-        //        // TODO: Error handling
-        //    }
-        //}
-
-        //private async Task RefreshAsync(string key, DateTimeOffset? absExpr, TimeSpan? sldExpr, CancellationToken token = default(CancellationToken))
-        //{
-        //    if (key == null)
-        //    {
-        //        throw new ArgumentNullException(nameof(key));
-        //    }
-
-        //    token.ThrowIfCancellationRequested();
-
-        //    // Note Refresh has no effect if there is just an absolute expiration (or neither).
-        //    TimeSpan? expr = null;
-        //    if (sldExpr.HasValue)
-        //    {
-        //        if (absExpr.HasValue)
-        //        {
-        //            var relExpr = absExpr.Value - DateTimeOffset.Now;
-        //            expr = relExpr <= sldExpr.Value ? relExpr : sldExpr;
-        //        }
-        //        else
-        //        {
-        //            expr = sldExpr;
-        //        }
-        //        await _cache.KeyExpireAsync(_instance + key, expr).ConfigureAwait(false);
-        //        // TODO: Error handling
-        //    }
-        //}
 
         private static long? GetExpirationInSeconds(DateTimeOffset creationTime, DateTimeOffset? absoluteExpiration, DistributedCacheEntryOptions options)
         {
