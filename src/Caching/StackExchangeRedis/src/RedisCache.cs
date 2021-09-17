@@ -16,9 +16,9 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
     /// </summary>
     public class RedisCache : IDistributedCache, IDisposable
     {
-        private const string AbsoluteExpirationKey = "absexp";
-        private const string SlidingExpirationKey = "sldexp";
-        private const string DataKey = "data";
+        //private const string AbsoluteExpirationKey = "absexp";
+        //private const string SlidingExpirationKey = "sldexp";
+        //private const string DataKey = "data";
         private const long NotPresent = -1;
 
         private volatile IConnectionMultiplexer _connection;
@@ -264,23 +264,12 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
             Connect();
 
             // This also resets the LRU status as desired.
-            // TODO: Can this be done in one operation on the server side? Probably, the trick would just be the DateTimeOffset math.
-            RedisValue[] results;
-            if (getData)
-            {
-                results = _cache.HashMemberGet(_instance + key, AbsoluteExpirationKey, SlidingExpirationKey, DataKey);
-            }
-            else
-            {
-                results = _cache.HashMemberGet(_instance + key, AbsoluteExpirationKey, SlidingExpirationKey);
-            }
 
-            // TODO: Error handling
-            if (results.Length >= 2)
+            var results = (RedisValue[])_cache.ScriptEvaluate(Scripts.GetAndRefreshCache, new
             {
-                MapMetadata(results, out DateTimeOffset? absExpr, out TimeSpan? sldExpr);
-                Refresh(key, absExpr, sldExpr);
-            }
+                key = (RedisKey)key,
+                getData = getData ? 1 : 0
+            });
 
             if (results.Length >= 3 && results[2].HasValue)
             {
@@ -302,23 +291,12 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
             await ConnectAsync(token).ConfigureAwait(false);
 
             // This also resets the LRU status as desired.
-            // TODO: Can this be done in one operation on the server side? Probably, the trick would just be the DateTimeOffset math.
-            RedisValue[] results;
-            if (getData)
-            {
-                results = await _cache.HashMemberGetAsync(_instance + key, AbsoluteExpirationKey, SlidingExpirationKey, DataKey).ConfigureAwait(false);
-            }
-            else
-            {
-                results = await _cache.HashMemberGetAsync(_instance + key, AbsoluteExpirationKey, SlidingExpirationKey).ConfigureAwait(false);
-            }
 
-            // TODO: Error handling
-            if (results.Length >= 2)
+            var results = (RedisValue[])await _cache.ScriptEvaluateAsync(Scripts.GetAndRefreshCache, new
             {
-                MapMetadata(results, out DateTimeOffset? absExpr, out TimeSpan? sldExpr);
-                await RefreshAsync(key, absExpr, sldExpr, token).ConfigureAwait(false);
-            }
+                key = (RedisKey)key,
+                getData = getData ? 1 : 0
+            }).ConfigureAwait(false);
 
             if (results.Length >= 3 && results[2].HasValue)
             {
@@ -356,73 +334,73 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
             // TODO: Error handling
         }
 
-        private void MapMetadata(RedisValue[] results, out DateTimeOffset? absoluteExpiration, out TimeSpan? slidingExpiration)
-        {
-            absoluteExpiration = null;
-            slidingExpiration = null;
-            var absoluteExpirationTicks = (long?)results[0];
-            if (absoluteExpirationTicks.HasValue && absoluteExpirationTicks.Value != NotPresent)
-            {
-                absoluteExpiration = new DateTimeOffset(absoluteExpirationTicks.Value, TimeSpan.Zero);
-            }
-            var slidingExpirationTicks = (long?)results[1];
-            if (slidingExpirationTicks.HasValue && slidingExpirationTicks.Value != NotPresent)
-            {
-                slidingExpiration = new TimeSpan(slidingExpirationTicks.Value);
-            }
-        }
+        //private void MapMetadata(RedisValue[] results, out DateTimeOffset? absoluteExpiration, out TimeSpan? slidingExpiration)
+        //{
+        //    absoluteExpiration = null;
+        //    slidingExpiration = null;
+        //    var absoluteExpirationTicks = (long?)results[0];
+        //    if (absoluteExpirationTicks.HasValue && absoluteExpirationTicks.Value != NotPresent)
+        //    {
+        //        absoluteExpiration = new DateTimeOffset(absoluteExpirationTicks.Value, TimeSpan.Zero);
+        //    }
+        //    var slidingExpirationTicks = (long?)results[1];
+        //    if (slidingExpirationTicks.HasValue && slidingExpirationTicks.Value != NotPresent)
+        //    {
+        //        slidingExpiration = new TimeSpan(slidingExpirationTicks.Value);
+        //    }
+        //}
 
-        private void Refresh(string key, DateTimeOffset? absExpr, TimeSpan? sldExpr)
-        {
-            if (key == null)
-            {
-                throw new ArgumentNullException(nameof(key));
-            }
+        //private void Refresh(string key, DateTimeOffset? absExpr, TimeSpan? sldExpr)
+        //{
+        //    if (key == null)
+        //    {
+        //        throw new ArgumentNullException(nameof(key));
+        //    }
 
-            // Note Refresh has no effect if there is just an absolute expiration (or neither).
-            TimeSpan? expr = null;
-            if (sldExpr.HasValue)
-            {
-                if (absExpr.HasValue)
-                {
-                    var relExpr = absExpr.Value - DateTimeOffset.Now;
-                    expr = relExpr <= sldExpr.Value ? relExpr : sldExpr;
-                }
-                else
-                {
-                    expr = sldExpr;
-                }
-                _cache.KeyExpire(_instance + key, expr);
-                // TODO: Error handling
-            }
-        }
+        //    // Note Refresh has no effect if there is just an absolute expiration (or neither).
+        //    TimeSpan? expr = null;
+        //    if (sldExpr.HasValue)
+        //    {
+        //        if (absExpr.HasValue)
+        //        {
+        //            var relExpr = absExpr.Value - DateTimeOffset.Now;
+        //            expr = relExpr <= sldExpr.Value ? relExpr : sldExpr;
+        //        }
+        //        else
+        //        {
+        //            expr = sldExpr;
+        //        }
+        //        _cache.KeyExpire(_instance + key, expr);
+        //        // TODO: Error handling
+        //    }
+        //}
 
-        private async Task RefreshAsync(string key, DateTimeOffset? absExpr, TimeSpan? sldExpr, CancellationToken token = default(CancellationToken))
-        {
-            if (key == null)
-            {
-                throw new ArgumentNullException(nameof(key));
-            }
+        //private async Task RefreshAsync(string key, DateTimeOffset? absExpr, TimeSpan? sldExpr, CancellationToken token = default(CancellationToken))
+        //{
+        //    if (key == null)
+        //    {
+        //        throw new ArgumentNullException(nameof(key));
+        //    }
 
-            token.ThrowIfCancellationRequested();
+        //    token.ThrowIfCancellationRequested();
 
-            // Note Refresh has no effect if there is just an absolute expiration (or neither).
-            TimeSpan? expr = null;
-            if (sldExpr.HasValue)
-            {
-                if (absExpr.HasValue)
-                {
-                    var relExpr = absExpr.Value - DateTimeOffset.Now;
-                    expr = relExpr <= sldExpr.Value ? relExpr : sldExpr;
-                }
-                else
-                {
-                    expr = sldExpr;
-                }
-                await _cache.KeyExpireAsync(_instance + key, expr).ConfigureAwait(false);
-                // TODO: Error handling
-            }
-        }
+        //    // Note Refresh has no effect if there is just an absolute expiration (or neither).
+        //    TimeSpan? expr = null;
+        //    if (sldExpr.HasValue)
+        //    {
+        //        if (absExpr.HasValue)
+        //        {
+        //            var relExpr = absExpr.Value - DateTimeOffset.Now;
+        //            expr = relExpr <= sldExpr.Value ? relExpr : sldExpr;
+        //        }
+        //        else
+        //        {
+        //            expr = sldExpr;
+        //        }
+        //        await _cache.KeyExpireAsync(_instance + key, expr).ConfigureAwait(false);
+        //        // TODO: Error handling
+        //    }
+        //}
 
         private static long? GetExpirationInSeconds(DateTimeOffset creationTime, DateTimeOffset? absoluteExpiration, DistributedCacheEntryOptions options)
         {

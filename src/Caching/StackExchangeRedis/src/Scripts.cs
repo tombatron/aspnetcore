@@ -19,44 +19,44 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
             return 1");
 
         internal static LuaScript GetAndRefreshCache = LuaScript.Prepare(@"
-            return getAndRefresh(@key, @getData)
+            local scope = {}
 
-            function getAndRefresh(key, getData)
-                result = nil
+            function scope.getAndRefresh(key, getData)
+                local result = nil
 
-                if getData == 1 then
-                    result = redis.call('HGET', key, 'absexp', 'sldexp', 'data')
+                if getData == '1' then
+                    result = redis.call('HMGET', key, 'absexp', 'sldexp', 'data')
                 else
-                    result = redis.call('HGET', key, 'absexp', 'sldexp')
+                    result = redis.call('HMGET', key, 'absexp', 'sldexp')
                 end
 
-                resultLen = tableLength(result)
+                local resultLen = scope.tableLength(result)
 
                 if resultLen >= 2 then
-                    refresh(key, result)
+                    scope.refresh(key, result)
                 end
 
-                if resultLen >= 3 and not result[3] == nil then
+                if resultLen >= 3 and result[3] ~= nil then
                     return result[3]
                 end
 
                 return nil
             end
 
-            function refresh(key, result)
-                absoluteExpiration = result[1]
-                slidingExpiration = result[2]
+            function scope.refresh(key, result)
+                local absoluteExpiration = result[1]
+                local slidingExpiration = result[2]
 
                 -- Refresh has no effect if there is just an absolute expiration(or neither).
-                if not slidingExpiration == nil then
-                    expiration = nil
-                    slidingExpirationUnixTimestamp = ticksToUnixTimestamp(slidingExpiration)
+                if slidingExpiration ~= nil then
+                    local expiration = nil
+                    local slidingExpirationUnixTimestamp = slidingExpiration / 10000000
 
-                    if not absoluteExpiration == nil then
-                        absoluteExpirationUnixTimestamp = ticksToUnixTimestamp(absoluteExpiration)
-                        currentTimestamp = redis.call('TIME')
+                    if absoluteExpiration ~= nil then
+                        local currentTime = redis.call('TIME')[1]
 
-                        relativeExpiration = absoluteExpirationUnixTimestamp - currentTimestamp
+                        local absoluteExpirationUnixTimestamp = scope.ticksToUnixTimestamp(absoluteExpiration)
+                        local relativeExpiration = absoluteExpirationUnixTimestamp - currentTime
 
                         if relativeExpiration <= slidingExpirationUnixTimestamp then
                             expiration = relativeExpiration
@@ -71,8 +71,8 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
                 end
             end
 
-            function tableLength(tbl)
-                len = 0
+            function scope.tableLength(tbl)
+                local len = 0
 
                 for _ in pairs(tbl) do
                     len = len + 1
@@ -81,20 +81,24 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
                 return len
             end
 
-            function ticksToUnixTimestamp(ticks)
-                unixTimestampBase = 62135596800
+            function scope.ticksToUnixTimestamp(ticks)
+                local unixTimestampBase = 62135596800
 
-                ticksAsSeconds = ticks / 10000000
+                local ticksAsSeconds = ticks / 10000000
 
-                return (ticksAsSeconds - unixTimestampBase)
+                local result = (ticksAsSeconds - unixTimestampBase)
+
+                return result
             end
 
-            function unixTimestampToTicks(unixTimestamp)
-                unixTimestampBaseTicks = 621355968000000000
+            function scope.unixTimestampToTicks(unixTimestamp)
+                local unixTimestampBaseTicks = 621355968000000000
 
-                unixTimestampAsTicks = unixTimestamp* 10000000
+                local unixTimestampAsTicks = unixTimestamp* 10000000
 
                 return (unixTimestampBaseTicks + unixTimestampAsTicks)
-            end");
+            end
+
+            return scope.getAndRefresh(@key, @getData)");
     }
 }
