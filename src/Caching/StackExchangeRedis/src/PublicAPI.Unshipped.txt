@@ -1,4 +1,6 @@
 #nullable enable
+Microsoft.Extensions.Caching.StackExchangeRedis.RedisCacheOptions.CacheSetFireAndForget.get -> bool
+Microsoft.Extensions.Caching.StackExchangeRedis.RedisCacheOptions.CacheSetFireAndForget.set -> void
 ~Microsoft.Extensions.Caching.StackExchangeRedis.RedisCacheOptions.ProfilingSession.get -> System.Func<StackExchange.Redis.Profiling.ProfilingSession>
 ~Microsoft.Extensions.Caching.StackExchangeRedis.RedisCacheOptions.ProfilingSession.set -> void
 ~Microsoft.Extensions.Caching.StackExchangeRedis.RedisCacheOptions.ConnectionMultiplexerFactory.get -> System.Func<System.Threading.Tasks.Task<StackExchange.Redis.IConnectionMultiplexer>>

@@ -40,6 +40,28 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
         /// </summary>
         public Func<ProfilingSession> ProfilingSession { get; set; }
 
+        private bool _cacheSetFireAndForget;
+        /// <summary>
+        /// Gets or sets whether or not cache should be set using the "fire and forget" command option.
+        ///
+        /// Setting this to true will improve performance, but if "something" goes wrong we won't know about it. 
+        ///
+        /// https://stackexchange.github.io/StackExchange.Redis/Basics.html#sync-vs-async-vs-fire-and-forget
+        /// </summary>
+        public bool CacheSetFireAndForget
+        {
+            get => _cacheSetFireAndForget;
+
+            set
+            {
+                _cacheSetFireAndForget = value;
+
+                RedisCommandFlags = CommandFlags.FireAndForget;
+            }
+        }
+
+        internal CommandFlags RedisCommandFlags { get; private set; } = CommandFlags.None;
+
         RedisCacheOptions IOptions<RedisCacheOptions>.Value
         {
             get { return this; }

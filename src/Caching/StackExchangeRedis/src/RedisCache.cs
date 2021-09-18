@@ -56,7 +56,7 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
         }
 
         /// <inheritdoc />
-        public async Task<byte[]> GetAsync(string key, CancellationToken token = default(CancellationToken))
+        public Task<byte[]> GetAsync(string key, CancellationToken token = default(CancellationToken))
         {
             if (key == null)
             {
@@ -65,7 +65,7 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
 
             token.ThrowIfCancellationRequested();
 
-            return await GetAndRefreshAsync(key, getData: true, token: token).ConfigureAwait(false);
+            return GetAndRefreshAsync(key, getData: true, token: token);
         }
 
         /// <inheritdoc />
@@ -99,7 +99,7 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
                 sldexp = options.SlidingExpiration?.Ticks ?? NotPresent,
                 relexp = GetExpirationInSeconds(creationTime, absoluteExpiration, options) ?? NotPresent,
                 data = value
-            });
+            }, _options.RedisCommandFlags);
         }
 
         /// <inheritdoc />
@@ -135,7 +135,7 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
                 sldexp = options.SlidingExpiration?.Ticks ?? NotPresent,
                 relexp = GetExpirationInSeconds(creationTime, absoluteExpiration, options) ?? NotPresent,
                 data = value
-            }).ConfigureAwait(false);
+            }, _options.RedisCommandFlags).ConfigureAwait(false);
         }
 
         /// <inheritdoc />
