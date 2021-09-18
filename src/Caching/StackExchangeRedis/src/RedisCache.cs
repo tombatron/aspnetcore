@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
+using StackExchange.Redis.KeyspaceIsolation;
 
 namespace Microsoft.Extensions.Caching.StackExchangeRedis
 {
@@ -193,7 +194,17 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
                     }
 
                     TryRegisterProfiler();
-                    _cache = _connection.GetDatabase();
+
+                    var db = _connection.GetDatabase();
+
+                    if (_options.InstanceName == string.Empty)
+                    {
+                        _cache = db;
+                    }
+                    else
+                    {
+                        _cache = db.WithKeyPrefix(_options.InstanceName);
+                    }
                 }
             }
             finally
@@ -205,6 +216,7 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
         private async Task ConnectAsync(CancellationToken token = default(CancellationToken))
         {
             CheckDisposed();
+
             token.ThrowIfCancellationRequested();
 
             if (_cache != null)
@@ -234,7 +246,17 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
                     }
 
                     TryRegisterProfiler();
-                    _cache = _connection.GetDatabase();
+
+                    var db = _connection.GetDatabase();
+
+                    if (_options.InstanceName == string.Empty)
+                    {
+                        _cache = db;
+                    }
+                    else
+                    {
+                        _cache = db.WithKeyPrefix(_options.InstanceName);
+                    }
                 }
             }
             finally
@@ -260,8 +282,6 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
 
             Connect();
 
-            // This also resets the LRU status as desired.
-
             var result = _cache.ScriptEvaluate(Scripts.GetAndRefreshCache, new
             {
                 key = (RedisKey)key,
@@ -282,8 +302,6 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
 
             await ConnectAsync(token).ConfigureAwait(false);
 
-            // This also resets the LRU status as desired.
-
             var result = await _cache.ScriptEvaluateAsync(Scripts.GetAndRefreshCache, new
             {
                 key = (RedisKey)key,
@@ -303,7 +321,7 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
 
             Connect();
 
-            _cache.KeyDelete(_instance + key);
+            _cache.KeyDelete(key);
             // TODO: Error handling
         }
 
@@ -317,7 +335,7 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
 
             await ConnectAsync(token).ConfigureAwait(false);
 
-            await _cache.KeyDeleteAsync(_instance + key).ConfigureAwait(false);
+            await _cache.KeyDeleteAsync(key).ConfigureAwait(false);
             // TODO: Error handling
         }
 
