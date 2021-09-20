@@ -197,7 +197,7 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
 
                     var db = _connection.GetDatabase();
 
-                    if (_options.InstanceName == string.Empty)
+                    if (string.IsNullOrEmpty(_options.InstanceName))
                     {
                         _cache = db;
                     }
@@ -225,6 +225,7 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
             }
 
             await _connectionLock.WaitAsync(token).ConfigureAwait(false);
+
             try
             {
                 if (_cache == null)
@@ -249,7 +250,7 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
 
                     var db = _connection.GetDatabase();
 
-                    if (_options.InstanceName == string.Empty)
+                    if (string.IsNullOrEmpty(_options.InstanceName))
                     {
                         _cache = db;
                     }
