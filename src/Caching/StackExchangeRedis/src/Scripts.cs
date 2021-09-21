@@ -13,7 +13,7 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
         // ARGV[4] (@data)   = data - byte[]
         internal static LuaScript SetCache = LuaScript.Prepare(@"
             redis.call('HSET', @key, 'absexp', @absexp, 'sldexp', @sldexp, 'data', @data)
-            if ARGV[3] ~= '-1' then
+            if @relexp ~= -1 then
                 redis.call('EXPIRE', @key, @relexp)
             end
             return 1");
@@ -28,6 +28,10 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
                     result = redis.call('HMGET', key, 'absexp', 'sldexp', 'data')
                 else
                     result = redis.call('HMGET', key, 'absexp', 'sldexp')
+                end
+
+                if not scope.hasResult(result) then
+                    return nil
                 end
 
                 local resultLen = scope.tableLength(result)
@@ -45,23 +49,31 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
 
             function scope.refresh(key, result)
                 local absoluteExpiration = result[1]
+                local absoluteExpirationUnixTimestamp = nil
+
+                if absoluteExpiration ~= '-1' then
+                    absoluteExpirationUnixTimestamp = scope.ticksToUnixTimestamp(absoluteExpiration)
+                end
+
                 local slidingExpiration = result[2]
+                local slidingExpirationUnixTimestamp = nil
+
+                if slidingExpiration ~= '-1' then
+                    slidingExpirationUnixTimestamp = slidingExpiration / 10000000
+                end
 
                 -- Refresh has no effect if there is just an absolute expiration(or neither).
-                if slidingExpiration ~= nil then
-                    local expiration = nil
-                    local slidingExpirationUnixTimestamp = slidingExpiration / 10000000
+                local expiration = nil
+                local currentTime = tonumber(redis.call('TIME')[1])
 
-                    if absoluteExpiration ~= nil then
-                        local currentTime = redis.call('TIME')[1]
+                if slidingExpirationUnixTimestamp ~= nil then
+                    if absoluteExpirationUnixTimestamp ~= nil then
+                        local relExp = absoluteExpirationUnixTimestamp - currentTime
 
-                        local absoluteExpirationUnixTimestamp = scope.ticksToUnixTimestamp(absoluteExpiration)
-                        local relativeExpiration = absoluteExpirationUnixTimestamp - currentTime
-
-                        if relativeExpiration <= slidingExpirationUnixTimestamp then
-                            expiration = relativeExpiration
+                        if relExp <= slidingExpirationUnixTimestamp then
+                            expiration = relExp
                         else
-                            expiration = slidingExpirationUnixTimestamp;
+                            expiration = slidingExpirationUnixTimestamp
                         end
                     else
                         expiration = slidingExpirationUnixTimestamp
@@ -79,6 +91,19 @@ namespace Microsoft.Extensions.Caching.StackExchangeRedis
                 end
 
                 return len
+            end
+
+            function scope.hasResult(tbl)
+                local result = false
+
+                for i, v in ipairs(tbl) do
+                    if v then
+                        result = true
+                        break
+                    end
+                end
+
+                return result
             end
 
             function scope.ticksToUnixTimestamp(ticks)
